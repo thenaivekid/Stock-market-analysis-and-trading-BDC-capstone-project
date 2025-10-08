@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  nepse-streamer:
+    build:
+      context: ../..
+      dockerfile: infra/nepse-streamer/Dockerfile
+    container_name: nepse-streamer
+    restart: unless-stopped
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - STREAMING_INTERVAL=1000  # 1 second (change to 100 for 100ms)
+    networks:
+      - custom_network
+    depends_on:
+      - kafka
+    volumes:
+      # Mount the actual scripts
+      - ../../nepse_live_streamer.py:/app/nepse_live_streamer.py
+      - ../../nepse_live_dashboard.py:/app/nepse_live_dashboard.py
+      # Mount scraper services
+      - ../../../scraper/app/services:/app/services
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  custom_network:
+    external: true

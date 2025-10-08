@@ -12,15 +12,35 @@ make test
 "$BROWSER" http://localhost:9870
 
 ---
-## 🎓 NEW: Learn Airflow Scheduling!
+## 🚀 NEW: Real-Time NEPSE Stock Streaming!
 
-Two demo DAGs to learn scheduling:
+Stream live NEPSE stock prices through Kafka every 100ms!
+
+**Quick Start:**
+```bash
+./run_nepse_stream.sh
+# Choose: 1 (Producer), then in new terminal choose: 2 (Dashboard)
+```
+
+**Features:**
+- ⚡ 333+ stocks updating every 100ms
+- 📊 Live top gainers/losers
+- 💹 Real-time market summary
+- 🔥 Production-grade Kafka streaming
+
+**Full Guide:** See `QUICK_START_NEPSE.md` and `NEPSE_STREAMING_GUIDE.md`
+
+---
+## 🎓 Learn Airflow Scheduling!
+
+Demo DAGs for learning:
 - `demo_every_minute` - Runs every minute automatically
-- `demo_run_in_2_minutes` - Runs once, 2 min after enabling
+- `demo_run_in_2_minutes` - Runs once at specific time
+- `demo_every_1_minute` - Fastest practical Airflow schedule
 
 **Quick Start:**
 1. Open Airflow UI (link above)
-2. Enable both demo DAGs (toggle ON)
+2. Enable demo DAGs (toggle ON)
 3. Watch them run automatically!
 
 **Full Guide:** See `QUICK_START_SCHEDULING.md` and `SCHEDULING_GUIDE.md`

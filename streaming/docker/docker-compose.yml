@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # NEPSE Stock Data Producer
+  nepse-producer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: nepse-producer
+    restart: unless-stopped
+    environment:
+      - KAFKA_BROKER=kafka:9092
+      - STREAMING_INTERVAL=1000  # milliseconds
+    networks:
+      - custom_network
+    volumes:
+      # Mount scraper services (shared dependency)
+      - ../../scraper/app/services:/app/services:ro
+    depends_on:
+      - kafka
+    command: ["python", "producers/nepse_producer.py", "1000"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # NEPSE Dashboard Consumer (optional - for testing)
+  nepse-dashboard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: nepse-dashboard
+    restart: unless-stopped
+    environment:
+      - KAFKA_BROKER=kafka:9092
+    networks:
+      - custom_network
+    volumes:
+      - ../../scraper/app/services:/app/services:ro
+    depends_on:
+      - kafka
+      - nepse-producer
+    command: ["python", "consumers/nepse_dashboard.py", "compact"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  custom_network:
+    external: true

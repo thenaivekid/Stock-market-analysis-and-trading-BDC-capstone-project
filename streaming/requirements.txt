@@ -1,0 +1,12 @@
+# Streaming Module Dependencies
+# Install with: pip install -r requirements.txt
+
+# Kafka client
+kafka-python==2.0.2
+
+# HTTP requests for NEPSE API
+requests==2.31.0
+
+# For future enhancements
+# python-dotenv==1.0.0  # Environment variable management
+# prometheus-client==0.18.0  # Metrics

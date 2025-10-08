@@ -1,18 +1,22 @@
 """
-Special Demo - Runs ONCE at a specific time (2 minutes from now)
+Special Demo - Runs ONCE at a specific time
 Watch this in the Airflow UI!
+
+IMPORTANT: This DAG is set to run at 18:51:00 UTC (2025-10-08)
+If this time has passed, edit this file and change the start_date below!
 """
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
 
-# Calculate time 2 minutes from now
-start_time = datetime.now() + timedelta(minutes=2)
+# 🔥 Set this to a time in the FUTURE (manually)
+# Current time is 18:49, so let's set it for 18:51 (2 minutes from now)
+start_time = datetime(2025, 10, 8, 18, 51, 0)
 
-print(f"⏰ This DAG will run at: {start_time.strftime('%H:%M:%S')}")
-print(f"⏰ Current time: {datetime.now().strftime('%H:%M:%S')}")
-print(f"⏰ Wait approximately 2 minutes and check Airflow UI!")
+print(f"⏰ This DAG will run at: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"⏰ Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"⏰ Make sure start_time is in the future!")
 
 def celebrate():
     """Celebration function when the scheduled task runs!"""
