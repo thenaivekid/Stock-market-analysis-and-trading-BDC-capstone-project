@@ -46,10 +46,14 @@ with DAG(
         conn_id='spark_default',
         application="/opt/airflow/dags/pipelines/etl.py",
         packages='org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0',
+        conf={
+            'spark.master': 'spark://spark-spark-1:7077'  # Explicitly set master
+        },
         application_args=["--metadata", json.dumps(metadata),
                           '--kafka_broker', 'kafka:9092',
                           '--hdfs_host', 'namenode',
                           '--hdfs_port', '9000'],
+        verbose=True  # Enable verbose logging for debugging
     )
 
     stop_spark_cluster = EmptyOperator(
