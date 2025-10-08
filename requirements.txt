@@ -1,0 +1,8 @@
+selenium==4.15.2
+requests==2.31.0
+pandas==2.1.3
+numpy==1.26.2
+fastapi
+uvicorn
+httpx
+beautifulsoup4
