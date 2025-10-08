@@ -1,0 +1,22 @@
+version: '3.5'
+
+services:
+  airflow-standalone:
+    image: airflow:0.1
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - airflow db init &&
+        airflow users create --role Admin --username admin --password admin --email admin@airflow.com --firstname admin --lastname admin &&
+        airflow standalone
+    ports:
+      - 8090:8080
+    volumes:
+      - ./../../data:/opt/airflow/data
+      - ./../../dags:/opt/airflow/dags
+    networks:
+      - etl_task
+
+networks:
+  etl_task:
+    name: custom_network
