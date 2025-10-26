@@ -10,8 +10,14 @@ echo ""
 
 # Step 1: Start all Docker containers
 echo "📦 Starting Docker containers..."
-cd /workspaces/Stock-market-analysis-and-trading-BDC-capstone-project
-docker-compose up -d
+cd BigDataCluster
+make start-all
+echo ""
+echo "⏳ Waiting for services to be ready (15 seconds)..."
+cd ../
+echo "starting all docker containers may take upto 10 minutes"
+sleep 300
+
 
 echo ""
 echo "⏳ Waiting for services to be ready (15 seconds)..."
