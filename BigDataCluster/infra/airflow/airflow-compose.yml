@@ -1,5 +1,3 @@
-version: '3.5'
-
 services:
   airflow-standalone:
     image: airflow:0.1
