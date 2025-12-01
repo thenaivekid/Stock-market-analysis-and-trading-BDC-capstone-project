@@ -7,6 +7,9 @@ sudo chmod +x /usr/local/bin/docker-compose
 docker-compose --version
 - if some other process is using the port used by my continers stop those processes as well
 
+### if port is already used, rm that
+sudo lsof -i :9001
+kill pid
 ### 1. Start the Big Data Infrastructure
 ```bash
 # Navigate to BigDataCluster directory
