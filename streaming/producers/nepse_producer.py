@@ -6,6 +6,13 @@ Streams live NEPSE stock prices to a single Kafka topic
 
 import sys
 import os
+
+# Add project root to sys.path
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+
 import json
 import time
 import signal
@@ -19,7 +26,8 @@ except ImportError:
 
 # Try to import the scraper service
 try:
-    from services.market_data import MarketDataService
+    from scraper.app.services.market_data import MarketDataService
+
 except ImportError:
     print("❌ Could not import MarketDataService. Make sure scraper/app is in path.")
     sys.exit(1)
