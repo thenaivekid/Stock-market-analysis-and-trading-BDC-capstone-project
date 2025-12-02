@@ -1,11 +1,14 @@
 # Streaming Module Dependencies
 # Install with: pip install -r requirements.txt
 
-# Kafka client
-kafka-python==2.0.2
+# Kafka client (2.3.0+ required for Python 3.13 compatibility)
+kafka-python>=2.3.0
 
 # HTTP requests for NEPSE API
 requests==2.31.0
+
+# HDFS client - using WebHDFS REST API via requests (no additional package needed)
+# requests is already listed above
 
 # For future enhancements
 # python-dotenv==1.0.0  # Environment variable management
