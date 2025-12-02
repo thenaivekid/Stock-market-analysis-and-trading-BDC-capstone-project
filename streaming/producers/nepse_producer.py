@@ -25,7 +25,7 @@ except ImportError:
     sys.exit(1)
 
 # Configuration
-KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'kafka:9092')  # container hostname
+KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'localhost:9092')  # container hostname
 TOPIC = os.getenv('KAFKA_TOPIC', 'nepse-stream')        # single topic for HDFS sink
 
 running = True
