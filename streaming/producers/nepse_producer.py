@@ -103,7 +103,7 @@ class NEPSEStreamer:
             print(f"⚠️  Fetch error: {e}")
             return 0
 
-    def run(self, interval_ms: int = 100):
+    def run(self, interval_ms: int = 100):                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
         """Main loop"""
         if not self.connect():
             return
