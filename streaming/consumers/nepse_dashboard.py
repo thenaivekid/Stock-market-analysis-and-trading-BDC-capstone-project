@@ -1,267 +1,186 @@
 #!/usr/bin/env python3
 """
-Real-Time NEPSE Stock Price Dashboard
-Consumes from Kafka and displays live data in terminal
+NEPSE Live Stock Dashboard
+Consumes one or more Kafka topics (default: `nepse-stream`) and displays live updates in the terminal.
 
-This shows streaming data in real-time!
+Features:
+- Configurable `KAFKA_BROKER` and `TOPICS` via environment variables
+- Polled consumer loop with graceful Ctrl+C shutdown using `consumer.wakeup()`
+- Rich-based table rendering
 """
 
-import sys
 import os
 import json
 import signal
 from datetime import datetime
-from collections import defaultdict
+from typing import Dict, List
 
-try:
-    from kafka import KafkaConsumer
-    from kafka.errors import KafkaError
-except ImportError:
-    print("❌ kafka-python not installed!")
-    print("Run: pip install kafka-python")
-    sys.exit(1)
+from kafka import KafkaConsumer
+from kafka.errors import KafkaError
+from rich.console import Console
+from rich.table import Table
+from rich.live import Live
 
 # Configuration
-KAFKA_BROKER = os.getenv('KAFKA_BROKER', 'localhost:9092')
-TOPICS = ['nepse-live-prices', 'nepse-top-gainers', 'nepse-top-losers', 'nepse-market-summary']
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
+# TOPICS can be a comma-separated list, default to `nepse-stream`
+TOPICS = os.getenv("TOPICS", "nepse-stream")
+POLL_TIMEOUT_MS = int(os.getenv("DASHBOARD_POLL_MS", "1000"))
+REFRESH_RATE = int(os.getenv("DASHBOARD_REFRESH_PER_SECOND", "2"))
 
-running = True
-
-def signal_handler(sig, frame):
-    """Handle Ctrl+C gracefully"""
-    global running
-    print("\n\n🛑 Shutting down dashboard...")
-    running = False
-
-signal.signal(signal.SIGINT, signal_handler)
+console = Console()
 
 
-class LiveDashboard:
-    """Real-time NEPSE dashboard"""
-    
-    def __init__(self, broker: str = KAFKA_BROKER):
+class NEPSELiveDashboard:
+    def __init__(self, broker: str = KAFKA_BROKER, topics: str = TOPICS):
         self.broker = broker
-        self.consumer = None
-        self.stats = {
-            'messages_received': 0,
-            'by_topic': defaultdict(int)
-        }
-        self.latest_data = {
-            'stocks': {},
-            'gainers': [],
-            'losers': [],
-            'summary': {}
-        }
-    
+        # support comma-separated topic list
+        self.topics = [t.strip() for t in topics.split(",") if t.strip()]
+        self.consumer: KafkaConsumer = None
+        self.stocks: Dict[str, Dict] = {}
+        self.running = True
+
     def connect(self):
-        """Connect to Kafka"""
-        print(f"📡 Connecting to Kafka broker: {self.broker}")
+        console.print(f"📡 Connecting to Kafka broker: {self.broker}")
+        console.print(f"📋 Subscribing to topics: {', '.join(self.topics)}\n")
         try:
             self.consumer = KafkaConsumer(
-                *TOPICS,
+                *self.topics,
                 bootstrap_servers=[self.broker],
-                value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-                auto_offset_reset='latest',  # Start from latest
+                value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+                auto_offset_reset="latest",
                 enable_auto_commit=True,
-                group_id='nepse-dashboard'
+                group_id="nepse-dashboard",
             )
-            print("✅ Connected to Kafka!")
-            print(f"📋 Subscribed to topics: {', '.join(TOPICS)}")
+            console.print("✅ Connected to Kafka!\n", style="bold green")
             return True
         except Exception as e:
-            print(f"❌ Failed to connect to Kafka: {e}")
-            print("Make sure Kafka is running and streamer is publishing data")
+            console.print(f"❌ Failed to create Kafka consumer: {e}", style="bold red")
             return False
-    
-    def format_price(self, price):
-        """Format price with color"""
+
+    def stop(self):
+        """Stop the dashboard and wake the consumer if needed."""
+        self.running = False
         try:
-            return f"Rs. {float(price):,.2f}"
-        except:
-            return "N/A"
-    
-    def format_change(self, change):
-        """Format change with color indicator"""
-        try:
-            change_val = float(change)
-            if change_val > 0:
-                return f"🟢 +{change_val:.2f}%"
-            elif change_val < 0:
-                return f"🔴 {change_val:.2f}%"
-            else:
-                return f"⚪ {change_val:.2f}%"
-        except:
-            return "N/A"
-    
-    def display_stock_update(self, stock):
-        """Display a single stock update"""
-        symbol = stock.get('symbol', 'N/A')
-        ltp = self.format_price(stock.get('lastTradedPrice'))
-        change = self.format_change(stock.get('percentageChange'))
-        volume = stock.get('totalTradeQuantity', 0)
-        
-        print(f"  📈 {symbol:8s} | {ltp:15s} | {change:15s} | Vol: {volume:,}")
-    
-    def display_gainers(self, data):
-        """Display top gainers"""
-        print("\n" + "=" * 70)
-        print("🟢 TOP 10 GAINERS")
-        print("=" * 70)
-        
-        gainers = data.get('gainers', [])
-        for i, stock in enumerate(gainers[:10], 1):
-            symbol = stock.get('symbol', 'N/A')
-            change = stock.get('percentageChange', 0)
-            ltp = self.format_price(stock.get('lastTradedPrice'))
-            print(f"{i:2d}. {symbol:8s} | {ltp:15s} | +{change:.2f}%")
-    
-    def display_losers(self, data):
-        """Display top losers"""
-        print("\n" + "=" * 70)
-        print("🔴 TOP 10 LOSERS")
-        print("=" * 70)
-        
-        losers = data.get('losers', [])
-        for i, stock in enumerate(losers[:10], 1):
-            symbol = stock.get('symbol', 'N/A')
-            change = stock.get('percentageChange', 0)
-            ltp = self.format_price(stock.get('lastTradedPrice'))
-            print(f"{i:2d}. {symbol:8s} | {ltp:15s} | {change:.2f}%")
-    
-    def display_summary(self, summary):
-        """Display market summary"""
-        print("\n" + "=" * 70)
-        print("📊 MARKET SUMMARY")
-        print("=" * 70)
-        print(f"Total Stocks:     {summary.get('totalStocks', 'N/A')}")
-        print(f"🟢 Advancing:     {summary.get('advancing', 'N/A')}")
-        print(f"🔴 Declining:     {summary.get('declining', 'N/A')}")
-        print(f"⚪ Unchanged:     {summary.get('unchanged', 'N/A')}")
-        print(f"Total Turnover:   Rs. {summary.get('totalTurnover', 0):,.2f}")
-        print(f"Total Volume:     {summary.get('totalVolume', 0):,}")
-        print(f"Total Trades:     {summary.get('totalTransactions', 0):,}")
-    
-    def run(self, mode: str = 'compact'):
-        """
-        Run the dashboard
-        
-        Args:
-            mode: 'compact' (summary updates) or 'verbose' (all updates)
-        """
+            if self.consumer:
+                # Interrupt any blocking `poll()`
+                self.consumer.wakeup()
+        except Exception:
+            pass
+
+    def update_stock(self, data: Dict):
+        symbol = data.get("symbol")
+        if symbol:
+            self.stocks[symbol] = data
+
+    def render_table(self) -> Table:
+        table = Table(title=f"NEPSE Live Stock Dashboard ({len(self.stocks)} symbols)")
+        table.add_column("Symbol", justify="left", style="cyan", no_wrap=True)
+        table.add_column("Last Price", justify="right", style="yellow")
+        table.add_column("% Change", justify="right")
+        table.add_column("Volume", justify="right")
+
+        # sort by percentageChange (desc)
+        sorted_stocks = sorted(
+            self.stocks.values(),
+            key=lambda x: float(x.get("percentageChange", 0) or 0),
+            reverse=True,
+        )
+
+        for stock in sorted_stocks[:50]:
+            symbol = stock.get("symbol", "N/A")
+            price = stock.get("lastTradedPrice")
+            change = stock.get("percentageChange", 0)
+            vol = stock.get("totalTradeQuantity", 0)
+
+            # Safe formatting
+            try:
+                price_str = f"{float(price):,.2f}"
+            except Exception:
+                price_str = str(price or "N/A")
+
+            try:
+                change_val = float(change)
+                if change_val > 0:
+                    change_str = f"[green]+{change_val:.2f}%[/green]"
+                elif change_val < 0:
+                    change_str = f"[red]{change_val:.2f}%[/red]"
+                else:
+                    change_str = f"{change_val:.2f}%"
+            except Exception:
+                change_str = str(change)
+
+            try:
+                vol_str = f"{int(vol):,}"
+            except Exception:
+                vol_str = str(vol or "N/A")
+
+            table.add_row(symbol, price_str, change_str, vol_str)
+
+        return table
+
+    def run(self):
         if not self.connect():
             return
-        
-        print("\n" + "=" * 70)
-        print("⚡ NEPSE LIVE STOCK DASHBOARD")
-        print("=" * 70)
-        print(f"Mode: {mode}")
-        print("Waiting for live data from Kafka...")
-        print("Press Ctrl+C to stop")
-        print("=" * 70)
-        
-        last_summary_display = 0
-        summary_display_interval = 5  # Show summary every 5 seconds
-        
+
+        console.print("Press Ctrl+C to stop\n", style="bold yellow")
+
+        # register a signal handler that calls the instance stop (so consumer.wakeup() is available)
+        def _handler(sig, frame):
+            console.print("\n🛑 Shutting down dashboard...", style="bold red")
+            self.stop()
+
+        original_handler = signal.signal(signal.SIGINT, _handler)
+
         try:
-            for message in self.consumer:
-                if not running:
-                    break
-                
-                topic = message.topic
-                data = message.value
-                
-                self.stats['messages_received'] += 1
-                self.stats['by_topic'][topic] += 1
-                
-                # Handle different topics
-                if topic == 'nepse-live-prices':
-                    symbol = data.get('symbol')
-                    if symbol:
-                        self.latest_data['stocks'][symbol] = data
-                    
-                    # In verbose mode, show each update
-                    if mode == 'verbose':
-                        self.display_stock_update(data)
-                
-                elif topic == 'nepse-top-gainers':
-                    self.latest_data['gainers'] = data.get('gainers', [])
-                    if mode == 'verbose':
-                        self.display_gainers(data)
-                
-                elif topic == 'nepse-top-losers':
-                    self.latest_data['losers'] = data.get('losers', [])
-                    if mode == 'verbose':
-                        self.display_losers(data)
-                
-                elif topic == 'nepse-market-summary':
-                    self.latest_data['summary'] = data
-                    
-                    # Show summary periodically in compact mode
-                    current_time = datetime.now().timestamp()
-                    if mode == 'compact' and (current_time - last_summary_display) >= summary_display_interval:
-                        print(f"\n⏰ {datetime.now().strftime('%H:%M:%S')} - Live Update")
-                        self.display_summary(data)
-                        
-                        # Show top 5 gainers and losers
-                        if self.latest_data['gainers']:
-                            print("\n🟢 Top 5 Gainers:")
-                            for i, stock in enumerate(self.latest_data['gainers'][:5], 1):
-                                symbol = stock.get('symbol', 'N/A')
-                                change = stock.get('percentageChange', 0)
-                                ltp = self.format_price(stock.get('lastTradedPrice'))
-                                print(f"  {i}. {symbol:8s} | {ltp:15s} | +{change:.2f}%")
-                        
-                        if self.latest_data['losers']:
-                            print("\n🔴 Top 5 Losers:")
-                            for i, stock in enumerate(self.latest_data['losers'][:5], 1):
-                                symbol = stock.get('symbol', 'N/A')
-                                change = stock.get('percentageChange', 0)
-                                ltp = self.format_price(stock.get('lastTradedPrice'))
-                                print(f"  {i}. {symbol:8s} | {ltp:15s} | {change:.2f}%")
-                        
-                        print("\n" + "-" * 70)
-                        print(f"📊 Messages received: {self.stats['messages_received']}")
-                        print("-" * 70)
-                        
-                        last_summary_display = current_time
-        
-        except KeyboardInterrupt:
-            pass
-        
+            with Live(self.render_table(), refresh_per_second=REFRESH_RATE, console=console) as live:
+                while self.running:
+                    try:
+                        records = self.consumer.poll(timeout_ms=POLL_TIMEOUT_MS)
+                        if not records:
+                            continue
+
+                        for tp, msgs in records.items():
+                            for message in msgs:
+                                try:
+                                    data = message.value
+                                    if isinstance(data, dict):
+                                        self.update_stock(data)
+                                except Exception:
+                                    # ignore malformed messages
+                                    continue
+
+                        # update display after batch
+                        live.update(self.render_table())
+
+                    except KafkaError as ke:
+                        console.print(f"Kafka error: {ke}", style="bold red")
+                        break
+                    except Exception as e:
+                        # Poll may be interrupted by wakeup when stopping
+                        if not self.running:
+                            break
+                        console.print(f"Unexpected error: {e}", style="bold red")
+                        break
+
         finally:
-            self.cleanup()
-    
-    def cleanup(self):
-        """Cleanup resources"""
-        print("\n" + "=" * 70)
-        print("📊 SESSION STATISTICS")
-        print("=" * 70)
-        print(f"Total messages: {self.stats['messages_received']}")
-        print("\nBy topic:")
-        for topic, count in self.stats['by_topic'].items():
-            print(f"  {topic}: {count}")
-        print("=" * 70)
-        
-        if self.consumer:
-            self.consumer.close()
-            print("✅ Kafka connection closed")
+            # restore original signal handler
+            try:
+                signal.signal(signal.SIGINT, original_handler)
+            except Exception:
+                pass
+            # cleanup
+            try:
+                if self.consumer:
+                    self.consumer.close()
+            except Exception:
+                pass
+            console.print("\n✅ Kafka connection closed", style="bold green")
 
 
 def main():
-    """Main entry point"""
-    print("\n🚀 Starting NEPSE Live Dashboard...")
-    
-    # Get mode from command line
-    mode = 'compact'  # Default
-    if len(sys.argv) > 1:
-        if sys.argv[1] in ['compact', 'verbose']:
-            mode = sys.argv[1]
-        else:
-            print(f"Invalid mode. Using default: {mode}")
-            print("Valid modes: compact, verbose")
-    
-    dashboard = LiveDashboard(broker=KAFKA_BROKER)
-    dashboard.run(mode=mode)
+    dashboard = NEPSELiveDashboard()
+    dashboard.run()
 
 
 if __name__ == "__main__":
